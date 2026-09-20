@@ -43,23 +43,62 @@ namespace StreamCompaction {
         }
 
         // for both scan and compact, this is an exclusive in place scan
+        // for sake of optimization, attempt to reduce number of launches
+        // since top levels/layers have few active threads, they can be put
+        // in one block using syncthreads between layers.
+        __global__ void kernScanReduce(int size, int firstLayer, int layers, int* data) {
+            int index = threadIdx.x;
+
+            // upsweep
+            for (int i = firstLayer; i < layers; ++i) {
+                int stride = 1 << (i + 1);
+                if (index < (size >> (i + 1))) {
+                    int seg = index * stride;
+                    data[seg + stride - 1] += data[seg + (stride >> 1) - 1];
+                }
+
+                __syncthreads();
+            }
+
+            if (index == 0) {
+                data[size - 1] = 0;
+            }
+            __syncthreads();
+
+            // downsweep
+            for (int i = layers - 1; i >= firstLayer; --i) {
+                int stride = 1 << (i + 1);
+                if (index < (size >> (i + 1))) {
+                    int seg = index * stride;
+                    int l = seg + (stride >> 1) - 1;
+                    int r = seg + stride - 1;
+                    
+                    int temp = data[l];
+                    data[l] = data[r];
+                    data[r] += temp;
+                }
+                __syncthreads();
+            }
+
+        }
+
+        // the idea is that every layer that has less than block size active threads will happen in one block,
+        // then do the remaining layers
         void scanDev(int size, int* dev_data) {
             int layers = ilog2ceil(size);
 
-            // upsweep
-            for (int i = 0; i < layers; ++i) {
-                int stride = 1 << (i + 1);
-                // get active threads
+            int firstLayer = 0;
+            for (; firstLayer < layers && (size >> (firstLayer + 1)) > BLOCK_SIZE; ++firstLayer) {
+                int stride = 1 << (firstLayer + 1);
                 int numThreads = size / stride;
                 dim3 blocks((numThreads + BLOCK_SIZE - 1) / BLOCK_SIZE);
-
+                
                 kernUpSweep << <blocks, BLOCK_SIZE >> > (numThreads, stride, dev_data);
-;            }
+            }
 
-            cudaMemset(dev_data + size - 1, 0, sizeof(int));
+            kernScanReduce << <1, BLOCK_SIZE >> > (size, firstLayer, layers, dev_data);
 
-            // downsweep
-            for (int i = layers - 1; i >= 0; --i) {
+            for (int i = firstLayer - 1; i >= 0; --i) {
                 int stride = 1 << (i + 1);
                 int numThreads = size / stride;
                 dim3 blocks((numThreads + BLOCK_SIZE - 1) / BLOCK_SIZE);
