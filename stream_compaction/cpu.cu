@@ -40,7 +40,7 @@ namespace StreamCompaction {
                 const int* bools, const int* indices) {
                 for (int i = 0; i < n; ++i) {
                     if (bools[i] == 1) {
-                        odata[indices[i]] == idata[i];
+                        odata[indices[i]] = idata[i];
                     }
                 }
             }
@@ -101,6 +101,7 @@ namespace StreamCompaction {
             int num = indices[n - 1] + bools[n - 1];
 
             timer().endCpuTimer();
+
             return num;
         }
     }
