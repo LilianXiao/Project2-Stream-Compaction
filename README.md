@@ -67,10 +67,15 @@ Array size evaluation began from `1<<8` to `1<<24`.  For sizes `1<<8` and `1<<10
 * Naive scans are generally not great, doing around `nlog(n)` work for `log(n)` launches.  This explains the great disparity between the naive and work-efficient implementations.
 * Although the work-efficient scan tries its best, Thrust is just too speedy.
 
-## Trying to decipher Thrust using Nsight
+**Trying to decipher Thrust using Nsight**
 
+<img width="1250" height="422" alt="kernels1" src="https://github.com/user-attachments/assets/df7017df-90e9-4ec0-894b-de0a9755c6f2" />
 
-**Test Output for Block Size 128, Array Size `1<<24`**
+<img width="965" height="407" alt="kernels2" src="https://github.com/user-attachments/assets/bfd72161-3bc7-4b54-8364-f4d8cd668d63" />
+
+`kernUpSweep` and `kernDownSweep` appear to take up nearly `83%` of GPU time, and there is also a considerable gap between roughly `422` to `439` ms.  That can be explained by CPU time between calls, so no GPU work has been done in that time.  I believe this shows a main kernel and a setup kernel, and demonstrates that whatever Thrust is doing doesn't require making multiple launches.  Maybe one kernel performs the entire scan, and has some swapping behavior, which replaces the need to stop the kernel.  Allocation and freeing of memory in general seems to be responsible for a lot of visually observable overhead.
+
+**A Test Output for Block Size 128, Array Size `1<<24`**
 
 ```
 ****************
