@@ -7,6 +7,7 @@
  */
 
 #include <cstdio>
+#include <vector>
 #include <stream_compaction/cpu.h>
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
@@ -20,6 +21,29 @@ int *b = new int[SIZE];
 int *c = new int[SIZE];
 
 int main(int argc, char* argv[]) {
+    // block size optimization testing
+    const int sweep[] = { 32, 64, 128, 256, 512, 1024 };
+    const int sweepReverse[] = { 1024, 512, 256, 128, 64, 32 };
+
+    // can change to whatever
+    const int sweepTest = 3;
+    const int sweepRuns = 30;
+
+    for (int bs : sweepReverse) {
+        StreamCompaction::Efficient::BLOCK_SIZE = bs;
+
+        for (int i = 0; i < sweepTest; ++i) StreamCompaction::Efficient::compact(SIZE, c, a);
+
+        std::vector<float> t;
+        for (int i = 0; i < sweepRuns; ++i) {
+            StreamCompaction::Efficient::compact(SIZE, c, a);
+            t.push_back(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation());
+        }
+
+        std::sort(t.begin(), t.end());
+        printf("Block %4d: median %.4f ms, min %.4f ms\n", bs, t[sweepRuns / 2], t[0]);
+    }
+    
     // Scan tests
 
     printf("\n");

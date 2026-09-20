@@ -5,8 +5,8 @@
 
 namespace StreamCompaction {
     namespace Efficient {
-        // ** change this for performance testing
-        static const int BLOCK_SIZE = 128;
+        // this is changeable externally for testing purposes
+        int BLOCK_SIZE = 128;
 
         using StreamCompaction::Common::PerformanceTimer;
         PerformanceTimer& timer()
